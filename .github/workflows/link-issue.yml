@@ -11,34 +11,43 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Extract issue number from branch name
+      - name: Extract info from branch name
         id: extract
         env:
           BRANCH: ${{ github.head_ref }}
         run: |
+          TYPE=$(echo "$BRANCH" | grep -oP '^[^/]+' || true)
           ISSUE=$(echo "$BRANCH" | grep -oP 'MKN-\K\d+' || true)
+          DESC=$(echo "$BRANCH" | grep -oP 'MKN-\d+-\K.+' | tr '-' ' ' || true)
+          echo "type=$TYPE" >> $GITHUB_OUTPUT
           echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+          echo "desc=$DESC" >> $GITHUB_OUTPUT
 
-      - name: Add Closes reference to PR body
+      - name: Update PR title and body
         if: steps.extract.outputs.issue != ''
         uses: actions/github-script@v7
         with:
           script: |
+            const type = '${{ steps.extract.outputs.type }}';
             const issue = '${{ steps.extract.outputs.issue }}';
+            const desc = '${{ steps.extract.outputs.desc }}';
+            const closing = `Closes #${issue}`;
+            const title = `${type}(MKN-${issue}): ${desc}`;
+
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
             });
 
-            const closing = `Closes #${issue}`;
+            const newBody = pr.body?.includes(closing)
+              ? pr.body
+              : (pr.body ? `${pr.body}\n\n${closing}` : closing);
 
-            if (!pr.body?.includes(closing)) {
-              const newBody = pr.body ? `${pr.body}\n\n${closing}` : closing;
-              await github.rest.pulls.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.payload.pull_request.number,
-                body: newBody,
-              });
-            }
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              title: title,
+              body: newBody,
+            });
