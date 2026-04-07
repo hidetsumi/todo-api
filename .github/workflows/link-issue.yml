@@ -1,0 +1,44 @@
+name: Link PR to Issue
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  link-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Extract issue number from branch name
+        id: extract
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          ISSUE=$(echo "$BRANCH" | grep -oP 'MKN-\K\d+' || true)
+          echo "issue=$ISSUE" >> $GITHUB_OUTPUT
+
+      - name: Add Closes reference to PR body
+        if: steps.extract.outputs.issue != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = '${{ steps.extract.outputs.issue }}';
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            const closing = `Closes #${issue}`;
+
+            if (!pr.body?.includes(closing)) {
+              const newBody = pr.body ? `${pr.body}\n\n${closing}` : closing;
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                body: newBody,
+              });
+            }
