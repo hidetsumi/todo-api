@@ -1,6 +1,8 @@
 enum UserStatus {
   ACTIVE
   DISABLED
+
+  @@map("user_status")
 }
 
 model User {
@@ -11,4 +13,6 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+
+  @@map("user")
 }
